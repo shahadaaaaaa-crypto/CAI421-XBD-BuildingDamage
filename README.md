@@ -1,17 +1,17 @@
-# CAI421 – xBD Building Damage 
+CAI421 – xBD Building Damage Assessment
 
-## Project Overview
+Project Overview
 
-This project focuses on classifying building damage using satellite images from the xBD dataset.
+This project focuses on four-class building damage classification using paired pre-disaster and post-disaster satellite images from the xBD dataset.
 
-The project compares two deep learning models:
+The project implements and compares two deep learning models:
 
-- **Baseline ResNet-50:** Uses post-disaster satellite images to classify building damage.
-- **Siamese ResNet-50:** Uses paired pre-disaster and post-disaster images with a shared ResNet-50 backbone to classify building damage.
+* Baseline ResNet-50: Uses post-disaster satellite images only to classify building damage.
+* Siamese ResNet-50: Uses paired pre-disaster and post-disaster images through two branches sharing the same ResNet-50 backbone.
 
-The main objective is to evaluate model performance under clean image conditions and different environmental degradation conditions.
+The main objective is to evaluate the classification performance of both models under clean image conditions and assess their robustness against different environmental image degradations.
 
-## Damage Classes
+Damage Classes
 
 The models classify buildings into four damage categories:
 
@@ -20,110 +20,211 @@ The models classify buildings into four damage categories:
 3. Major Damage
 4. Destroyed
 
-## Dataset
+Dataset
 
-The project uses the xBD satellite imagery dataset.
+The project uses the xBD (Building Damage Assessment) satellite imagery dataset, distributed through the xView2 challenge.
 
-The notebook selects 600 image pairs and extracts 4,089 building samples.
+A total of 600 matched pre-disaster and post-disaster image pairs were selected from the available dataset.
 
-The dataset is divided into:
+Building crops were extracted using the corresponding building annotations, resulting in:
 
-| Dataset Split | Number of Samples |
-|---|---:|
-| Training | 2,756 |
-| Validation | 626 |
-| Testing | 707 |
-| **Total** | **4,089** |
+* Selected image pairs: 600
+* Contributing image pairs: 473
+* Total building samples: 4,089
+* Maximum building samples per pair: 10
 
-A group-aware splitting strategy is used to prevent image-pair leakage between the training, validation, and testing sets.
+Dataset Split
 
-The original dataset is not included in this repository. Users must obtain the xBD dataset separately and follow its license and usage conditions.
+The dataset was divided into training, validation, and testing sets using StratifiedGroupKFold, with image pairs grouped by pair_id.
 
-## Data Preprocessing
+Dataset Split	Number of Samples
+Training	2,756
+Validation	626
+Testing	707
+Total	4,089
+
+The grouping strategy ensures that samples belonging to the same image pair do not appear in different splits.
+
+A pair-level leakage verification was performed, confirming that no image pairs overlap between the training, validation, and testing sets.
+
+Class Distribution
+
+Damage Class	Number of Samples
+No Damage	2,524
+Minor Damage	444
+Major Damage	488
+Destroyed	633
+Total	4,089
+
+The original xBD dataset is not included in this repository. Users must obtain the dataset separately and comply with its applicable license and usage conditions.
+
+Data Preprocessing
 
 The preprocessing pipeline includes:
 
-- Extracting pre-disaster and post-disaster building image crops.
-- Assigning one of four damage labels to each building.
-- Resizing images to 224 × 224 pixels.
-- Normalizing images using ImageNet mean and standard deviation.
-- Splitting the dataset into training, validation, and testing sets.
+1. Extracting pre-disaster and post-disaster RGB building crops.
+2. Selecting building regions using polygon annotations.
+3. Saving image crops at 512 × 512 pixels.
+4. Resizing images to 224 × 224 pixels.
+5. Converting images into tensors.
+6. Applying ImageNet mean and standard deviation normalization.
 
-## Environmental Degradation
+The same preprocessing pipeline is applied to both image inputs.
 
-Four image degradation methods are applied to evaluate model robustness:
+Environmental Degradation
+
+Four environmental degradation methods are implemented to evaluate model robustness:
 
 1. Gaussian Noise
 2. Atmospheric Blur
 3. Resolution Reduction
-4. Compression Artifacts
+4. JPEG Compression Artifacts
 
-The degradation methods are applied to both pre-disaster and post-disaster images.
+The degradation transformations are applied separately to both pre-disaster and post-disaster images.
 
-A total of 32,712 degraded images are generated.
+A total of 32,712 degraded images are generated:
 
-## Model Architecture
+4,089 samples × 2 image views × 4 degradation types.
 
-### Baseline ResNet-50
+Important: Degraded images are generated for the dataset, but robustness evaluation uses the degraded test samples only. Both models are trained using clean images. Clean test images are also evaluated separately.
 
-The baseline model uses a single post-disaster image as input. ResNet-50 extracts image features, which are passed to a classification layer to predict one of the four damage classes.
+The degradation transformations are implemented using Albumentations (version 2.0.8 in the recorded experiment).
 
-### Siamese ResNet-50
+Model Architecture
 
-The Siamese model receives paired pre-disaster and post-disaster images through two branches that share the same ResNet-50 weights.
+1. Baseline ResNet-50
 
-The extracted features are combined using absolute difference and element-wise multiplication before the final classification layer.
+The baseline model uses only the post-disaster image as input.
 
-## Evaluation
+The architecture consists of:
 
-The project evaluates both models under clean and degraded image conditions.
+* ImageNet-pretrained ResNet-50 backbone.
+* Dropout layer (0.3).
+* Fully connected classification layer (2048 → 4).
+* Softmax-based four-class prediction.
 
-The evaluation focuses on classification performance and robustness using metrics such as:
+2. Siamese ResNet-50
 
-- Accuracy
-- Precision
-- Recall
-- F1-score
-- Confusion Matrix
+The Siamese model receives paired pre-disaster and post-disaster images through two branches sharing the same ResNet-50 weights.
 
-## Repository Contents
+The extracted feature vectors are combined using:
 
-- `CAI421_xBD.ipynb`: Complete project implementation, including data preparation, preprocessing, degradation generation, model training, and evaluation.
-- `README.md`: Project description and instructions.
-- `requirements.txt`: Required Python libraries.
+* Absolute Difference.
+* Element-wise Multiplication.
+* Feature Concatenation.
 
-## Requirements
+The fused feature vector has 4,096 dimensions and is passed to an MLP classification head:
+
+* Linear (4096 → 512).
+* ReLU activation.
+* Dropout (0.4).
+* Linear (512 → 4).
+
+The final output represents the four building damage classes.
+
+Training Configuration
+
+Both models are trained using the following configuration:
+
+Parameter	Value
+Optimizer	Adam
+Learning Rate	0.0001
+Batch Size	16
+Maximum Epochs	10
+Early Stopping Patience	3
+Random Seed	42
+Loss Function	Class-weighted Cross Entropy
+Input Image Size	224 × 224
+Backbone	ImageNet-pretrained ResNet-50
+
+Early stopping monitors validation macro F1 to select the best model checkpoint.
+
+Class weights are calculated using the training data to address class imbalance.
+
+Evaluation
+
+Both models are evaluated under clean and degraded test image conditions.
+
+The evaluation metrics include:
+
+* Accuracy
+* Macro F1-score
+* Weighted F1-score
+* Per-class Precision
+* Per-class Recall
+* Per-class F1-score
+* Confusion Matrix
+
+The robustness evaluation compares model performance across the four degradation conditions.
+
+The notebook also generates training history plots and evaluation outputs for model comparison.
+
+Repository Contents
+
+The repository contains the following files:
+
+* CAI421_xBD.ipynb: Complete project implementation, including dataset preparation, preprocessing, degradation generation, model architecture, training, and evaluation.
+* README.md: Project description, methodology, configuration, and execution instructions.
+* requirements.txt: Required Python libraries.
+
+Requirements
 
 The project uses Python and the following libraries:
 
-- NumPy
-- Pandas
-- Pillow
-- Shapely
-- Scikit-learn
-- Matplotlib
-- Albumentations
-- PyTorch
-- Torchvision
-- IPython
+* NumPy
+* Pandas
+* Pillow
+* Shapely
+* Scikit-learn
+* Matplotlib
+* Albumentations
+* PyTorch
+* Torchvision
+* IPython
 
-## How to Run the Project
+Install the required libraries using:
+
+pip install -r requirements.txt
+
+How to Run the Project
 
 The notebook is designed to run in Google Colab.
 
-1. Open `CAI421_xBD.ipynb` using Google Colab.
+Follow these steps:
+
+1. Open CAI421_xBD.ipynb using Google Colab.
 2. Connect your Google Drive.
-3. Obtain the xBD dataset and upload the archive to your Google Drive.
-4. Update the `ARCHIVE_PATH` variable in the first configuration cell to match the location of your dataset archive.
-5. Make sure a GPU runtime is enabled.
-6. Run the notebook cells in order.
+3. Obtain the xBD dataset and upload the required archive to your Google Drive.
+4. Update the ARCHIVE_PATH variable in the first configuration cell to match the dataset archive location.
+5. Enable a GPU runtime.
+6. Run all notebook cells in order.
 
-The notebook processes the dataset, creates the required image crops and data splits, generates degraded images, trains both models, and evaluates their performance.
+The notebook performs the following operations:
 
-## Reproducibility
+* Dataset extraction and preparation.
+* Building crop generation.
+* Dataset splitting and leakage verification.
+* Image preprocessing.
+* Environmental degradation generation.
+* Baseline and Siamese model implementation.
+* Model training.
+* Clean test evaluation.
+* Robustness evaluation.
+* Results visualization and saving.
 
-A fixed random seed of 42 is used for reproducibility.
+Reproducibility
 
-The notebook also uses a batch size of 16 and an image size of 224 × 224 pixels.
+A fixed random seed of 42 is used for the main Python, NumPy, and PyTorch randomization settings.
 
+The experiment uses a batch size of 16 and an input image size of 224 × 224 pixels.
 
+The notebook records the training configuration, validation performance, test metrics, and robustness evaluation results.
+
+The recorded experiment was executed using a Google Colab GPU runtime.
+
+Notes
+
+* The original xBD dataset is not redistributed in this repository.
+* Users must obtain the dataset separately and follow its applicable license and usage conditions.
+* The notebook requires access to Google Drive for dataset storage and result saving.
+* A GPU runtime is recommended for model training.
