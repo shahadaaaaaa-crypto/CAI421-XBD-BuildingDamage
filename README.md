@@ -126,12 +126,4 @@ A fixed random seed of 42 is used for reproducibility.
 
 The notebook also uses a batch size of 16 and an image size of 224 × 224 pixels.
 
-## Limitations
 
-- The experiments use a selected subset of the xBD dataset.
-- Environmental degradations are synthetically generated.
-- Results may vary depending on the hardware and software environment.
-
-## Authors
-
-CAI421 Project Team
