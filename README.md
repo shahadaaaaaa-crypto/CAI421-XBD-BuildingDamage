@@ -222,9 +222,4 @@ The notebook records the training configuration, validation performance, test me
 
 The recorded experiment was executed using a Google Colab GPU runtime.
 
-Notes
 
-* The original xBD dataset is not redistributed in this repository.
-* Users must obtain the dataset separately and follow its applicable license and usage conditions.
-* The notebook requires access to Google Drive for dataset storage and result saving.
-* A GPU runtime is recommended for model training.
